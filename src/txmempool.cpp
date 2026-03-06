@@ -497,6 +497,10 @@ void CTxMemPool::removeUnchecked(txiter it, MemPoolRemovalReason reason)
     );
 
     const uint256 hash = it->GetTx().GetHash();
+    // Keep optional mempool address/spent indexes in sync with tx eviction.
+    removeAddressIndex(hash);
+    removeSpentIndex(hash);
+
     for (const CTxIn& txin : it->GetTx().vin)
         mapNextTx.erase(txin.prevout);
 
@@ -962,7 +966,15 @@ void CCoinsViewMemPool::PackageAddTransaction(const CTransactionRef& tx)
 size_t CTxMemPool::DynamicMemoryUsage() const {
     LOCK(cs);
     // Estimate the overhead of mapTx to be 15 pointers + an allocation, as no exact formula for boost::multi_index_contained is implemented.
-    return memusage::MallocUsage(sizeof(CTxMemPoolEntry) + 15 * sizeof(void*)) * mapTx.size() + memusage::DynamicUsage(mapNextTx) + memusage::DynamicUsage(mapDeltas) + memusage::DynamicUsage(vTxHashes) + cachedInnerUsage;
+    return memusage::MallocUsage(sizeof(CTxMemPoolEntry) + 15 * sizeof(void*)) * mapTx.size() +
+           memusage::DynamicUsage(mapNextTx) +
+           memusage::DynamicUsage(mapDeltas) +
+           memusage::DynamicUsage(vTxHashes) +
+           memusage::DynamicUsage(mapAddress) +
+           memusage::DynamicUsage(mapAddressInserted) +
+           memusage::DynamicUsage(mapSpent) +
+           memusage::DynamicUsage(mapSpentInserted) +
+           cachedInnerUsage;
 }
 
 void CTxMemPool::RemoveUnbroadcastTx(const uint256& txid, const bool unchecked) {
