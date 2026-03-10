@@ -151,8 +151,8 @@ enum BlockStatus : uint32_t {
 class CBlockIndex
 {
 public:
-    //! pointer to the hash of the block, if any. Memory is owned by this CBlockIndex
-    const uint256* phashBlock{nullptr};
+    //! Block hash stored inline to avoid depending on map key stability.
+    uint256 hash{};
 
     //! pointer to the index of the predecessor of this block
     CBlockIndex* pprev{nullptr};
@@ -226,7 +226,8 @@ public:
     }
 
     explicit CBlockIndex(const CBlockHeader& block)
-        : nVersion{block.nVersion},
+        : hash{block.GetHash()},
+          nVersion{block.nVersion},
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
@@ -282,8 +283,7 @@ public:
 
     uint256 GetBlockHash() const
     {
-        assert(phashBlock != nullptr);
-        return *phashBlock;
+        return hash;
     }
 
     /* YespowerSugar */

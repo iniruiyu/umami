@@ -6,6 +6,7 @@
 import os
 import re
 import argparse
+from glob import glob
 from shutil import copyfile
 
 SOURCE_DIR = os.path.abspath(
@@ -38,12 +39,14 @@ def parse_makefile(makefile):
             if current_lib:
                 source = line.split()[0]
                 if (
-                    source.endswith(".cpp")
+                    (source.endswith(".cpp") or source.endswith(".c"))
                     and not source.startswith("$")
                     and source not in ignore_list
                 ):
                     source_filename = source.replace("/", "\\")
-                    object_filename = source.replace("/", "_")[:-4] + ".obj"
+                    object_filename = os.path.splitext(
+                        source.replace("/", "_")
+                    )[0] + ".obj"
                     lib_sources[current_lib].append(
                         (source_filename, object_filename)
                     )
@@ -140,9 +143,14 @@ def main():
         if "Makefile" in makefile_name:
             parse_makefile(os.path.join(SOURCE_DIR, makefile_name))
     for key, value in lib_sources.items():
-        vcxproj_filename = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), key, key + ".vcxproj")
+        templates = glob(
+            os.path.join(os.path.dirname(__file__), key, "*.vcxproj.in")
         )
+        if len(templates) != 1:
+            raise FileNotFoundError(
+                f"Expected exactly one .vcxproj.in template in {key}, found {len(templates)}"
+            )
+        vcxproj_filename = os.path.abspath(templates[0][:-3])
         content = ""
         for source_filename, object_filename in value:
             content += (
@@ -155,8 +163,23 @@ def main():
                 + object_filename
                 + "</ObjectFileName>\n"
             )
+            if source_filename.endswith(".c"):
+                content += "      <CompileAs>CompileAsC</CompileAs>\n"
             content += "    </ClCompile>\n"
         set_properties(vcxproj_filename, "@SOURCE_FILES@\n", content)
+    for entry in os.scandir(os.path.dirname(__file__)):
+        if not entry.is_dir():
+            continue
+        alias = os.path.join(entry.path, entry.name + ".vcxproj")
+        projects = [
+            project
+            for project in glob(os.path.join(entry.path, "*.vcxproj"))
+            if os.path.normcase(project) != os.path.normcase(alias)
+        ]
+        if len(projects) != 1:
+            continue
+        if os.path.normcase(projects[0]) != os.path.normcase(alias):
+            copyfile(projects[0], alias)
     parse_config_into_sugar_config()
     copyfile(
         os.path.join(SOURCE_DIR, "../build_msvc/sugarchain_config.h"),

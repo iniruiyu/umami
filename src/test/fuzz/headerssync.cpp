@@ -57,7 +57,7 @@ FUZZ_TARGET_INIT(headers_sync_state, initialize_headers_sync_state_fuzz)
     SetMockTime(mock_time);
 
     const uint256 genesis_hash = genesis_header.GetHash();
-    start_index.phashBlock = &genesis_hash;
+    start_index.hash = genesis_hash;
 
     arith_uint256 min_work{UintToArith256(ConsumeUInt256(fuzzed_data_provider))};
     FuzzedHeadersSyncState headers_sync(

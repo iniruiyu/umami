@@ -29,7 +29,7 @@ struct TestBlockAndIndex {
         stream >> block;
 
         blockHash = block.GetHash();
-        blockindex.phashBlock = &blockHash;
+        blockindex.hash = blockHash;
         blockindex.nBits = 503362144; // Sugarchain: Introduce YespowerSugar // block6513497 // >>> print int("0x1e00b260", 0)
     }
 };

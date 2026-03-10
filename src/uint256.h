@@ -36,7 +36,7 @@ public:
     {
         assert(sizeof(m_data) >= l);
         std::fill(m_data.begin(), m_data.end(), 0);
-        memcpy(m_data.begin(), p, l);
+        memcpy(m_data.data(), p, l);
     }
 
     constexpr explicit base_blob(Span<const unsigned char> vch)

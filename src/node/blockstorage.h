@@ -15,8 +15,10 @@
 #include <util/fs.h>
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
-#include <unordered_map>
+#include <deque>
+#include <utility>
 #include <vector>
 
 class ArgsManager;
@@ -49,11 +51,128 @@ static constexpr size_t BLOCK_SERIALIZATION_HEADER_SIZE = CMessageHeader::MESSAG
 
 extern std::atomic_bool fReindex;
 
-// Because validation code takes pointers to the map's CBlockIndex objects, if
-// we ever switch to another associative container, we need to either use a
-// container that has stable addressing (true of all std associative
-// containers), or make the key a `std::unique_ptr<CBlockIndex>`
-using BlockMap = std::unordered_map<uint256, CBlockIndex, BlockHasher>;
+class BlockMap
+{
+    static constexpr size_t MIN_CAPACITY{8};
+
+    std::deque<CBlockIndex> m_indices;
+    std::vector<CBlockIndex*> m_table;
+
+    [[nodiscard]] static size_t Bucket(const uint256& hash, size_t capacity)
+    {
+        return BlockHasher{}(hash) & (capacity - 1);
+    }
+
+    void Rehash(size_t new_capacity)
+    {
+        std::vector<CBlockIndex*> new_table(new_capacity, nullptr);
+        for (CBlockIndex& block_index : m_indices) {
+            size_t bucket{Bucket(block_index.hash, new_capacity)};
+            while (new_table[bucket] != nullptr) {
+                bucket = (bucket + 1) & (new_capacity - 1);
+            }
+            new_table[bucket] = &block_index;
+        }
+        m_table.swap(new_table);
+    }
+
+    void EnsureCapacityForInsert(size_t new_size)
+    {
+        size_t new_capacity{m_table.empty() ? MIN_CAPACITY : m_table.size()};
+        while (new_size * 10 > new_capacity * 7) {
+            new_capacity *= 2;
+        }
+        if (new_capacity != m_table.size()) {
+            Rehash(new_capacity);
+        }
+    }
+
+    [[nodiscard]] CBlockIndex* FindInternal(const uint256& hash)
+    {
+        if (m_table.empty()) return nullptr;
+
+        size_t bucket{Bucket(hash, m_table.size())};
+        while (CBlockIndex* block_index = m_table[bucket]) {
+            if (block_index->hash == hash) {
+                return block_index;
+            }
+            bucket = (bucket + 1) & (m_table.size() - 1);
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] const CBlockIndex* FindInternal(const uint256& hash) const
+    {
+        if (m_table.empty()) return nullptr;
+
+        size_t bucket{Bucket(hash, m_table.size())};
+        while (const CBlockIndex* block_index = m_table[bucket]) {
+            if (block_index->hash == hash) {
+                return block_index;
+            }
+            bucket = (bucket + 1) & (m_table.size() - 1);
+        }
+        return nullptr;
+    }
+
+public:
+    [[nodiscard]] size_t size() const { return m_indices.size(); }
+    [[nodiscard]] bool empty() const { return m_indices.empty(); }
+    [[nodiscard]] size_t count(const uint256& hash) const { return FindInternal(hash) ? 1 : 0; }
+
+    CBlockIndex* Find(const uint256& hash) { return FindInternal(hash); }
+    const CBlockIndex* Find(const uint256& hash) const { return FindInternal(hash); }
+
+    CBlockIndex& operator[](const uint256& hash)
+    {
+        CBlockIndex* block_index{Find(hash)};
+        assert(block_index != nullptr);
+        return *block_index;
+    }
+
+    const CBlockIndex& operator[](const uint256& hash) const
+    {
+        const CBlockIndex* block_index{Find(hash)};
+        assert(block_index != nullptr);
+        return *block_index;
+    }
+
+    template <typename... Args>
+    std::pair<CBlockIndex*, bool> try_emplace(const uint256& hash, Args&&... args)
+    {
+        if (CBlockIndex* existing{Find(hash)}) {
+            return {existing, false};
+        }
+
+        EnsureCapacityForInsert(m_indices.size() + 1);
+        m_indices.emplace_back(std::forward<Args>(args)...);
+        CBlockIndex* block_index{&m_indices.back()};
+        block_index->hash = hash;
+
+        size_t bucket{Bucket(hash, m_table.size())};
+        while (m_table[bucket] != nullptr) {
+            bucket = (bucket + 1) & (m_table.size() - 1);
+        }
+        m_table[bucket] = block_index;
+        return {block_index, true};
+    }
+
+    template <typename Func>
+    void ForEach(Func&& func)
+    {
+        for (CBlockIndex& block_index : m_indices) {
+            func(block_index);
+        }
+    }
+
+    template <typename Func>
+    void ForEach(Func&& func) const
+    {
+        for (const CBlockIndex& block_index : m_indices) {
+            func(block_index);
+        }
+    }
+};
 
 struct CBlockIndexWorkComparator {
     bool operator()(const CBlockIndex* pa, const CBlockIndex* pb) const;
