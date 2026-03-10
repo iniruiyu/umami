@@ -21,6 +21,8 @@
     <VcpkgIncludeDir>$(MSBuildThisFileDirectory)vcpkg_installed\$(VcpkgTriplet)\include</VcpkgIncludeDir>
     <VcpkgLibraryDir Condition="'$(Configuration)'=='Release'">$(MSBuildThisFileDirectory)vcpkg_installed\$(VcpkgTriplet)\lib</VcpkgLibraryDir>
     <VcpkgLibraryDir Condition="'$(Configuration)'=='Debug'">$(MSBuildThisFileDirectory)vcpkg_installed\$(VcpkgTriplet)\debug\lib</VcpkgLibraryDir>
+    <EnvVcpkgIncludeDir>D:\CODEX\ENV\vcpkg_installed\$(VcpkgTriplet)\include</EnvVcpkgIncludeDir>
+    <EnvVcpkgLibraryDir>D:\CODEX\ENV\vcpkg_installed\$(VcpkgTriplet)\lib</EnvVcpkgLibraryDir>
     <BoostFilesystemLib Condition="'$(Configuration)'=='Release'">boost_filesystem-vc144-mt.lib</BoostFilesystemLib>
     <BoostFilesystemLib Condition="'$(Configuration)'=='Debug'">boost_filesystem-vc144-mt-gd.lib</BoostFilesystemLib>
     <BoostSystemLib Condition="'$(Configuration)'=='Release'">boost_system-vc144-mt.lib</BoostSystemLib>
@@ -103,13 +105,13 @@
       <AdditionalOptions>/utf-8 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <DisableSpecificWarnings>4018;4244;4267;4715;4805</DisableSpecificWarnings>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <PreprocessorDefinitions>_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;ZMQ_STATIC;NOMINMAX;WIN32;HAVE_CONFIG_H;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;_CONSOLE;_WIN32_WINNT=0x0601;_WIN32_IE=0x0501;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(VcpkgIncludeDir);..\..\src;..\..\src\minisketch\include;..\..\src\univalue\include;..\..\src\secp256k1\include;..\..\src\leveldb\include;..\..\src\leveldb\helpers\memenv;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;ZMQ_STATIC;USE_UPNP=1;USE_NATPMP=1;MINIUPNP_STATICLIB;NATPMP_STATICLIB;NOMINMAX;WIN32;HAVE_CONFIG_H;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;_CONSOLE;_WIN32_WINNT=0x0601;_WIN32_IE=0x0501;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(EnvVcpkgIncludeDir);$(VcpkgIncludeDir);..\..\src;..\..\src\minisketch\include;..\..\src\univalue\include;..\..\src\secp256k1\include;..\..\src\leveldb\include;..\..\src\leveldb\helpers\memenv;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>$(VcpkgLibraryDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(BoostFilesystemLib);$(BoostSystemLib);event.lib;event_core.lib;event_extra.lib;libdb48.lib;sqlite3.lib;$(ZeroMqLib);Iphlpapi.lib;ws2_32.lib;Shlwapi.lib;kernel32.lib;user32.lib;gdi32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(EnvVcpkgLibraryDir);$(VcpkgLibraryDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(BoostFilesystemLib);$(BoostSystemLib);event.lib;event_core.lib;event_extra.lib;libdb48.lib;libminiupnpc.lib;natpmp.lib;sqlite3.lib;$(ZeroMqLib);msvcrt.lib;oldnames.lib;legacy_stdio_definitions.lib;Iphlpapi.lib;ws2_32.lib;Shlwapi.lib;kernel32.lib;user32.lib;gdi32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
     </Link>
     <Lib>
