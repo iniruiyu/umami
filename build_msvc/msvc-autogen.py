@@ -87,7 +87,8 @@ def parse_config_into_sugar_config():
         "PACKAGE_VERSION"
     ] = f"\"{config_dict['CLIENT_VERSION_MAJOR']}.{config_dict['CLIENT_VERSION_MINOR']}.{config_dict['CLIENT_VERSION_BUILD']}\""
     version = config_dict["PACKAGE_VERSION"].strip('"')
-    config_dict["PACKAGE_STRING"] = f'"Sugarchain Core {version}"'
+    # Keep the generated Windows package string aligned with configure.ac.
+    config_dict["PACKAGE_STRING"] = f'"sugarcoin Umami Lite {version}"'
 
     with open(
         os.path.join(SOURCE_DIR, "../build_msvc/sugarchain_config.h.in"),

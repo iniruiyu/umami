@@ -24,7 +24,7 @@
 #define COPYRIGHT_HOLDERS_FINAL "The Bitcoin Core developers"
 
 /* Replacement for %s in copyright holders string */
-#define COPYRIGHT_HOLDERS_SUBSTITUTION "Sugarchain Core"
+#define COPYRIGHT_HOLDERS_SUBSTITUTION "sugarcoin Umami Lite"
 
 /* Copyright year */
 #define COPYRIGHT_YEAR $
@@ -119,16 +119,16 @@
 #define HAVE_DLLEXPORT_ATTRIBUTE 1
 
 /* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "https://github.com/bitcoin/bitcoin/issues"
+#define PACKAGE_BUGREPORT "https://github.com/iniruiyu/umami/issues"
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "Sugarchain Core"
+#define PACKAGE_NAME "sugarcoin Umami Lite"
 
 /* Define to the full name and version of this package. */
 #define PACKAGE_STRING $
 
 /* Define to the home page for this package. */
-#define PACKAGE_URL "https://bitcoincore.org/"
+#define PACKAGE_URL "https://github.com/iniruiyu/umami"
 
 /* Define to the version of this package. */
 #define PACKAGE_VERSION $
