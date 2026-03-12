@@ -55,6 +55,8 @@ struct MemPoolOptions {
     bool permit_bare_multisig{DEFAULT_PERMIT_BAREMULTISIG};
     bool require_standard{true};
     bool full_rbf{DEFAULT_MEMPOOL_FULL_RBF};
+    bool maintain_address_index{false};
+    bool maintain_spent_index{false};
     MemPoolLimits limits{};
 };
 } // namespace kernel

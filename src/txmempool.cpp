@@ -397,6 +397,8 @@ CTxMemPool::CTxMemPool(const Options& opts)
       m_max_datacarrier_bytes{opts.max_datacarrier_bytes},
       m_require_standard{opts.require_standard},
       m_full_rbf{opts.full_rbf},
+      m_maintain_address_index{opts.maintain_address_index},
+      m_maintain_spent_index{opts.maintain_spent_index},
       m_limits{opts.limits}
 {
 }
@@ -1177,6 +1179,7 @@ std::string RemovalReasonToString(const MemPoolRemovalReason& r) noexcept
 // Sugar: Addressindex
 void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewCache &view)
 {
+    if (!m_maintain_address_index) return;
     LOCK(cs);
     const CTransaction& tx = entry.GetTx();
     std::vector<CMempoolAddressDeltaKey> inserted;
@@ -1225,6 +1228,7 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
 bool CTxMemPool::getAddressIndex(std::vector<std::pair<uint256, int> > &addresses,
                                  std::vector<std::pair<CMempoolAddressDeltaKey, CMempoolAddressDelta> > &results) const
 {
+    if (!m_maintain_address_index) return false;
     LOCK(cs);
     for (std::vector<std::pair<uint256, int> >::iterator it = addresses.begin(); it != addresses.end(); it++) {
         addressDeltaMap::const_iterator ait = mapAddress.lower_bound(CMempoolAddressDeltaKey((*it).second, (*it).first));
@@ -1238,6 +1242,7 @@ bool CTxMemPool::getAddressIndex(std::vector<std::pair<uint256, int> > &addresse
 
 bool CTxMemPool::removeAddressIndex(const uint256 txhash)
 {
+    if (!m_maintain_address_index) return false;
     LOCK(cs);
     addressDeltaMapInserted::iterator it = mapAddressInserted.find(txhash);
 
@@ -1254,6 +1259,7 @@ bool CTxMemPool::removeAddressIndex(const uint256 txhash)
 
 void CTxMemPool::addSpentIndex(const CTxMemPoolEntry &entry, const CCoinsViewCache &view)
 {
+    if (!m_maintain_spent_index) return;
     LOCK(cs);
 
     const CTransaction& tx = entry.GetTx();
@@ -1286,6 +1292,7 @@ void CTxMemPool::addSpentIndex(const CTxMemPoolEntry &entry, const CCoinsViewCac
 
 bool CTxMemPool::getSpentIndex(const CSpentIndexKey &key, CSpentIndexValue &value) const
 {
+    if (!m_maintain_spent_index) return false;
     LOCK(cs);
     mapSpentIndex::const_iterator it = mapSpent.find(key);
     if (it != mapSpent.end()) {
@@ -1297,6 +1304,7 @@ bool CTxMemPool::getSpentIndex(const CSpentIndexKey &key, CSpentIndexValue &valu
 
 bool CTxMemPool::removeSpentIndex(const uint256 txhash)
 {
+    if (!m_maintain_spent_index) return false;
     LOCK(cs);
     mapSpentIndexInserted::iterator it = mapSpentInserted.find(txhash);
 

@@ -476,6 +476,8 @@ public:
     const std::optional<unsigned> m_max_datacarrier_bytes;
     const bool m_require_standard;
     const bool m_full_rbf;
+    const bool m_maintain_address_index;
+    const bool m_maintain_spent_index;
 
     const Limits m_limits;
 

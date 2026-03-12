@@ -1498,6 +1498,8 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     if (const auto err{ApplyArgsManOptions(args, chainparams, mempool_opts)}) {
         return InitError(*err);
     }
+    mempool_opts.maintain_address_index = args.GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
+    mempool_opts.maintain_spent_index = args.GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
     mempool_opts.check_ratio = std::clamp<int>(mempool_opts.check_ratio, 0, 1'000'000);
 
     int64_t descendant_limit_bytes = mempool_opts.limits.descendant_size_vbytes * 40;
