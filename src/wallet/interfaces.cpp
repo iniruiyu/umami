@@ -353,7 +353,10 @@ public:
         }
         num_blocks = m_wallet->GetLastBlockHeight();
         block_time = -1;
-        CHECK_NONFATAL(m_wallet->chain().findBlock(m_wallet->GetLastBlockHash(), FoundBlock().time(block_time)));
+        // Older wallet state can temporarily reference a tip hash that is no longer
+        // available in the current in-memory block index. Return an unknown time
+        // instead of letting a NonFatalCheckError escape through the Qt event loop.
+        m_wallet->chain().findBlock(m_wallet->GetLastBlockHash(), FoundBlock().time(block_time));
         tx_status = MakeWalletTxStatus(*m_wallet, mi->second);
         return true;
     }
