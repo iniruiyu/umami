@@ -356,6 +356,8 @@ public:
         // Older wallet state can temporarily reference a tip hash that is no longer
         // available in the current in-memory block index. Return an unknown time
         // instead of letting a NonFatalCheckError escape through the Qt event loop.
+        // 较旧的钱包状态可能会暂时引用一个已不在当前内存区块索引中的 tip 哈希。
+        // 这里返回未知时间，避免 NonFatalCheckError 穿过 Qt 事件循环导致界面异常。
         m_wallet->chain().findBlock(m_wallet->GetLastBlockHash(), FoundBlock().time(block_time));
         tx_status = MakeWalletTxStatus(*m_wallet, mi->second);
         return true;
