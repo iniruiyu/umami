@@ -20,7 +20,7 @@ FUZZ_TARGET(chain)
     }
 
     const uint256 zero{};
-    disk_block_index->hash = zero;
+    disk_block_index->phashBlock = &zero;
     {
         LOCK(::cs_main);
         (void)disk_block_index->ConstructBlockHash();
@@ -61,7 +61,7 @@ FUZZ_TARGET(chain)
     }
 
     CBlockIndex block_index{block_header};
-    block_index.hash = zero;
+    block_index.phashBlock = &zero;
     (void)block_index.GetBlockHash();
     (void)block_index.ToString();
 }

@@ -750,10 +750,10 @@ static bool IsCurrentForAntiFeeSniping(interfaces::Chain& chain, const uint256& 
     }
     constexpr int64_t MAX_ANTI_FEE_SNIPING_TIP_AGE = 8 * 60 * 60; // in seconds
     int64_t block_time;
-    // If the wallet tip hash is temporarily missing from the active in-memory index,
-    // fall back to disabling anti-fee-sniping instead of aborting transaction creation.
-    // 如果钱包记录的 tip 哈希暂时不在当前内存区块索引里，就回退为禁用 anti-fee-sniping，
-    // 不要因为 findBlock 失败直接中断建交易流程。
+    // Fall back to disabling anti-fee-sniping if the wallet tip hash is not
+    // currently resolvable in the block index instead of aborting send flow.
+    // 如果钱包 tip 哈希当前无法在区块索引里解析到，就回退为禁用 anti-fee-sniping，
+    // 不要直接中断转账流程。
     if (!chain.findBlock(block_hash, FoundBlock().time(block_time))) {
         return false;
     }

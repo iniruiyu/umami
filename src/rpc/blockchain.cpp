@@ -1424,12 +1424,12 @@ static RPCHelpMan getchaintips()
     std::set<const CBlockIndex*> setOrphans;
     std::set<const CBlockIndex*> setPrevs;
 
-    chainman.BlockIndex().ForEach([&](const CBlockIndex& block_index) {
+    for (const auto& [_, block_index] : chainman.BlockIndex()) {
         if (!active_chain.Contains(&block_index)) {
             setOrphans.insert(&block_index);
             setPrevs.insert(block_index.pprev);
         }
-    });
+    }
 
     for (std::set<const CBlockIndex*>::iterator it = setOrphans.begin(); it != setOrphans.end(); ++it) {
         if (setPrevs.erase(*it) == 0) {
@@ -1445,7 +1445,7 @@ static RPCHelpMan getchaintips()
     for (const CBlockIndex* block : setTips) {
         UniValue obj(UniValue::VOBJ);
         obj.pushKV("height", block->nHeight);
-        obj.pushKV("hash", block->GetBlockHash().GetHex());
+        obj.pushKV("hash", block->phashBlock->GetHex());
 
         const int branchLen = block->nHeight - active_chain.FindFork(block)->nHeight;
         obj.pushKV("branchlen", branchLen);

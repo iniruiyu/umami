@@ -143,13 +143,6 @@ enum BlockStatus : uint32_t {
     BLOCK_ASSUMED_VALID      =   256,
 };
 
-static constexpr uint32_t BLOCK_INDEX_STATUS_BITS = 9;
-static constexpr uint32_t BLOCK_INDEX_FILE_BITS = 32 - BLOCK_INDEX_STATUS_BITS;
-static constexpr uint32_t BLOCK_INDEX_STATUS_STORAGE_MASK =
-    BLOCK_VALID_MASK | BLOCK_HAVE_MASK | BLOCK_FAILED_MASK | BLOCK_OPT_WITNESS | BLOCK_ASSUMED_VALID;
-static_assert(BLOCK_INDEX_STATUS_BITS + BLOCK_INDEX_FILE_BITS == 32, "Packed CBlockIndex status/file layout must stay within 32 bits");
-static_assert(BLOCK_INDEX_STATUS_STORAGE_MASK < (1U << BLOCK_INDEX_STATUS_BITS), "CBlockIndex::nStatus bitfield is too small");
-
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
  * candidates to be the next block. A blockindex may have multiple pprev pointing
@@ -158,8 +151,8 @@ static_assert(BLOCK_INDEX_STATUS_STORAGE_MASK < (1U << BLOCK_INDEX_STATUS_BITS),
 class CBlockIndex
 {
 public:
-    //! Block hash stored inline to avoid depending on map key stability.
-    uint256 hash{};
+    //! pointer to the hash of the block, if any. Memory is owned by this CBlockIndex
+    const uint256* phashBlock{nullptr};
 
     //! pointer to the index of the predecessor of this block
     CBlockIndex* pprev{nullptr};
@@ -170,12 +163,8 @@ public:
     //! height of the entry in the chain. The genesis block has height 0
     int nHeight{0};
 
-    //! Compact the disk file number together with the block status flags.
-    //! 23 bits covers more than eight million block files (>1 PiB at 128 MiB/file).
-    uint32_t nStatus GUARDED_BY(::cs_main) : BLOCK_INDEX_STATUS_BITS {0};
-
-    //! Which # file this block is stored in (blk?????.dat).
-    uint32_t nFile GUARDED_BY(::cs_main) : BLOCK_INDEX_FILE_BITS {0};
+    //! Which # file this block is stored in (blk?????.dat)
+    int nFile GUARDED_BY(::cs_main){0};
 
     //! Byte offset within blk?????.dat where this block's data is stored
     unsigned int nDataPos GUARDED_BY(::cs_main){0};
@@ -203,6 +192,14 @@ public:
     //! @sa ActivateSnapshot
     unsigned int nChainTx{0};
 
+    //! Verification status of this block. See enum BlockStatus
+    //!
+    //! Note: this value is modified to show BLOCK_OPT_WITNESS during UTXO snapshot
+    //! load to avoid the block index being spuriously rewound.
+    //! @sa NeedsRedownload
+    //! @sa ActivateSnapshot
+    uint32_t nStatus GUARDED_BY(::cs_main){0};
+
     //! block header
     int32_t nVersion{0};
     uint256 hashMerkleRoot{};
@@ -217,8 +214,7 @@ public:
     unsigned int nTimeMax{0};
 
     explicit CBlockIndex(const CBlockHeader& block)
-        : hash{block.GetHash()},
-          nVersion{block.nVersion},
+        : nVersion{block.nVersion},
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
@@ -264,7 +260,8 @@ public:
 
     uint256 GetBlockHash() const
     {
-        return hash;
+        assert(phashBlock != nullptr);
+        return *phashBlock;
     }
 
     /**
@@ -402,19 +399,14 @@ public:
     {
         LOCK(::cs_main);
         int _nVersion = s.GetVersion();
-        // READWRITE helpers need assignable lvalues, so serialize packed fields via temporaries.
-        uint32_t nStatus{obj.nStatus};
-        int nFile{static_cast<int>(obj.nFile)};
-        unsigned int nDataPos{obj.nDataPos};
-        unsigned int nUndoPos{obj.nUndoPos};
         if (!(s.GetType() & SER_GETHASH)) READWRITE(VARINT_MODE(_nVersion, VarIntMode::NONNEGATIVE_SIGNED));
 
         READWRITE(VARINT_MODE(obj.nHeight, VarIntMode::NONNEGATIVE_SIGNED));
-        READWRITE(VARINT(nStatus));
+        READWRITE(VARINT(obj.nStatus));
         READWRITE(VARINT(obj.nTx));
-        if (nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO)) READWRITE(VARINT_MODE(nFile, VarIntMode::NONNEGATIVE_SIGNED));
-        if (nStatus & BLOCK_HAVE_DATA) READWRITE(VARINT(nDataPos));
-        if (nStatus & BLOCK_HAVE_UNDO) READWRITE(VARINT(nUndoPos));
+        if (obj.nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO)) READWRITE(VARINT_MODE(obj.nFile, VarIntMode::NONNEGATIVE_SIGNED));
+        if (obj.nStatus & BLOCK_HAVE_DATA) READWRITE(VARINT(obj.nDataPos));
+        if (obj.nStatus & BLOCK_HAVE_UNDO) READWRITE(VARINT(obj.nUndoPos));
 
         // block header
         READWRITE(obj.nVersion);
@@ -423,8 +415,6 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
-
-        SER_READ(obj, obj.nStatus = nStatus; obj.nFile = nFile; obj.nDataPos = nDataPos; obj.nUndoPos = nUndoPos);
     }
 
     uint256 ConstructBlockHash() const
