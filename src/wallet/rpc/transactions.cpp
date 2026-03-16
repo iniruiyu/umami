@@ -28,8 +28,13 @@ static void WalletTxToJSON(const CWallet& wallet, const CWalletTx& wtx, UniValue
         entry.pushKV("blockheight", conf->confirmed_block_height);
         entry.pushKV("blockindex", conf->position_in_block);
         int64_t block_time;
-        CHECK_NONFATAL(chain.findBlock(conf->confirmed_block_hash, FoundBlock().time(block_time)));
-        entry.pushKV("blocktime", block_time);
+        // If the confirmed block hash is temporarily missing from the in-memory
+        // block index, keep the RPC response usable instead of aborting it.
+        // 如果确认区块哈希暂时不在内存区块索引里，就保持 RPC 结果可用，
+        // 不要直接让查询失败。
+        if (chain.findBlock(conf->confirmed_block_hash, FoundBlock().time(block_time))) {
+            entry.pushKV("blocktime", block_time);
+        }
     } else {
         entry.pushKV("trusted", CachedTxIsTrusted(wallet, wtx));
     }
