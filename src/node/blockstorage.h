@@ -54,44 +54,24 @@ extern std::atomic_bool fReindex;
 class BlockMap
 {
     static constexpr size_t MIN_CAPACITY{8};
-    static constexpr uint32_t EMPTY_BUCKET{0};
 
     std::deque<CBlockIndex> m_indices;
-    // Store 1-based deque indexes so an empty bucket still costs only 32 bits.
-    std::vector<uint32_t> m_table;
+    std::vector<CBlockIndex*> m_table;
 
     [[nodiscard]] static size_t Bucket(const uint256& hash, size_t capacity)
     {
         return BlockHasher{}(hash) & (capacity - 1);
     }
 
-    [[nodiscard]] static uint32_t EncodeIndex(size_t index)
-    {
-        return static_cast<uint32_t>(index + 1);
-    }
-
-    [[nodiscard]] CBlockIndex* DecodeIndex(uint32_t encoded_index)
-    {
-        if (encoded_index == EMPTY_BUCKET) return nullptr;
-        return &m_indices[encoded_index - 1];
-    }
-
-    [[nodiscard]] const CBlockIndex* DecodeIndex(uint32_t encoded_index) const
-    {
-        if (encoded_index == EMPTY_BUCKET) return nullptr;
-        return &m_indices[encoded_index - 1];
-    }
-
     void Rehash(size_t new_capacity)
     {
-        std::vector<uint32_t> new_table(new_capacity, EMPTY_BUCKET);
-        for (size_t index = 0; index < m_indices.size(); ++index) {
-            const CBlockIndex& block_index{m_indices[index]};
+        std::vector<CBlockIndex*> new_table(new_capacity, nullptr);
+        for (CBlockIndex& block_index : m_indices) {
             size_t bucket{Bucket(block_index.hash, new_capacity)};
-            while (new_table[bucket] != EMPTY_BUCKET) {
+            while (new_table[bucket] != nullptr) {
                 bucket = (bucket + 1) & (new_capacity - 1);
             }
-            new_table[bucket] = EncodeIndex(index);
+            new_table[bucket] = &block_index;
         }
         m_table.swap(new_table);
     }
@@ -112,7 +92,7 @@ class BlockMap
         if (m_table.empty()) return nullptr;
 
         size_t bucket{Bucket(hash, m_table.size())};
-        while (CBlockIndex* block_index = DecodeIndex(m_table[bucket])) {
+        while (CBlockIndex* block_index = m_table[bucket]) {
             if (block_index->hash == hash) {
                 return block_index;
             }
@@ -126,7 +106,7 @@ class BlockMap
         if (m_table.empty()) return nullptr;
 
         size_t bucket{Bucket(hash, m_table.size())};
-        while (const CBlockIndex* block_index = DecodeIndex(m_table[bucket])) {
+        while (const CBlockIndex* block_index = m_table[bucket]) {
             if (block_index->hash == hash) {
                 return block_index;
             }
@@ -165,17 +145,15 @@ public:
         }
 
         EnsureCapacityForInsert(m_indices.size() + 1);
-        assert(m_indices.size() < std::numeric_limits<uint32_t>::max());
         m_indices.emplace_back(std::forward<Args>(args)...);
-        const size_t index{m_indices.size() - 1};
         CBlockIndex* block_index{&m_indices.back()};
         block_index->hash = hash;
 
         size_t bucket{Bucket(hash, m_table.size())};
-        while (m_table[bucket] != EMPTY_BUCKET) {
+        while (m_table[bucket] != nullptr) {
             bucket = (bucket + 1) & (m_table.size() - 1);
         }
-        m_table[bucket] = EncodeIndex(index);
+        m_table[bucket] = block_index;
         return {block_index, true};
     }
 
