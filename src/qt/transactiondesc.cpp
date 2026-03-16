@@ -23,92 +23,14 @@
 #include <wallet/types.h>
 
 #include <stdint.h>
-#include <optional>
 #include <string>
-#include <set>
 
 #include <QLatin1String>
-#include <QStringList>
-
-#include <univalue.h>
 
 using wallet::ISMINE_ALL;
 using wallet::ISMINE_SPENDABLE;
 using wallet::ISMINE_WATCH_ONLY;
 using wallet::isminetype;
-
-namespace {
-static std::optional<std::string> ExtractAddressFromPrevTx(const CTransactionRef& prev_tx, const COutPoint& prevout)
-{
-    if (!prev_tx || prevout.n >= prev_tx->vout.size()) {
-        return std::nullopt;
-    }
-
-    CTxDestination address;
-    if (!ExtractDestination(prev_tx->vout.at(prevout.n).scriptPubKey, address)) {
-        return std::nullopt;
-    }
-    return EncodeDestination(address);
-}
-
-static std::optional<std::string> ExtractAddressFromRpc(interfaces::Node& node, const COutPoint& prevout)
-{
-    // Best-effort fallback: query the previous transaction through RPC when it
-    // is not in the wallet. This may still fail if txindex is disabled.
-    // 尽力回退：当前置交易不在钱包里时，通过 RPC 查询前一笔交易。
-    // 如果节点没开 txindex，这里仍然可能失败。
-    try {
-        UniValue params{UniValue::VARR};
-        params.push_back(prevout.hash.GetHex());
-        params.push_back(true);
-        const UniValue result = node.executeRpc("getrawtransaction", params, "");
-        const UniValue& vout = result["vout"];
-        if (!vout.isArray() || prevout.n >= vout.size()) {
-            return std::nullopt;
-        }
-        const UniValue& script_pub_key = vout[prevout.n]["scriptPubKey"];
-        const UniValue& address = script_pub_key["address"];
-        if (address.isStr() && !address.get_str().empty()) {
-            return address.get_str();
-        }
-    } catch (const UniValue&) {
-    } catch (const std::exception&) {
-    }
-    return std::nullopt;
-}
-
-static QString FormatInputSenders(interfaces::Node& node, interfaces::Wallet& wallet, const interfaces::WalletTx& wtx)
-{
-    std::set<std::string> unique_addresses;
-    for (const CTxIn& txin : wtx.tx->vin) {
-        const COutPoint& prevout = txin.prevout;
-        if (prevout.IsNull()) {
-            continue;
-        }
-
-        std::optional<std::string> sender_address;
-        if (const CTransactionRef prev_tx = wallet.getTx(prevout.hash)) {
-            sender_address = ExtractAddressFromPrevTx(prev_tx, prevout);
-        }
-        if (!sender_address) {
-            sender_address = ExtractAddressFromRpc(node, prevout);
-        }
-        if (sender_address && !sender_address->empty()) {
-            unique_addresses.insert(*sender_address);
-        }
-    }
-
-    if (unique_addresses.empty()) {
-        return {};
-    }
-
-    QStringList senders;
-    for (const std::string& address : unique_addresses) {
-        senders << GUIUtil::HtmlEscape(address);
-    }
-    return senders.join(", ");
-}
-} // namespace
 
 QString TransactionDesc::FormatTxStatus(const interfaces::WalletTxStatus& status, bool inMempool)
 {
@@ -222,21 +144,13 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
         if (nNet > 0)
         {
             // Credit
-            const QString inferred_senders = FormatInputSenders(node, wallet, wtx);
-            if (!inferred_senders.isEmpty()) {
-                // Show inferred funding addresses when the sender is not stored in mapValue.
-                // 当 mapValue 里没有发送方时，尽量展示从输入推断出的出资地址。
-                strHTML += "<b>" + tr("From") + ":</b> " + inferred_senders + "<br>";
-            }
             CTxDestination address = DecodeDestination(rec->address);
             if (IsValidDestination(address)) {
                 std::string name;
                 isminetype ismine;
                 if (wallet.getAddress(address, &name, &ismine, /* purpose= */ nullptr))
                 {
-                    if (inferred_senders.isEmpty()) {
-                        strHTML += "<b>" + tr("From") + ":</b> " + tr("unknown") + "<br>";
-                    }
+                    strHTML += "<b>" + tr("From") + ":</b> " + tr("unknown") + "<br>";
                     strHTML += "<b>" + tr("To") + ":</b> ";
                     strHTML += GUIUtil::HtmlEscape(rec->address);
                     QString addressOwned = ismine == ISMINE_SPENDABLE ? tr("own address") : tr("watch-only");
