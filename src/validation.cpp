@@ -2137,7 +2137,7 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
     // For simplicity, always leave P2SH+WITNESS+TAPROOT on except for the two
     // violating blocks.
     uint32_t flags{SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_TAPROOT};
-    const auto it{consensusparams.script_flag_exceptions.find(block_index.GetBlockHash())};
+    const auto it{consensusparams.script_flag_exceptions.find(*Assert(block_index.phashBlock))};
     if (it != consensusparams.script_flag_exceptions.end()) {
         flags = it->second;
     }
@@ -2185,7 +2185,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     assert(pindex);
 
     uint256 block_hash{block.GetHash()};
-    assert(pindex->GetBlockHash() == block_hash);
+    assert(*pindex->phashBlock == block_hash);
     const bool parallel_script_checks{scriptcheckqueue.HasThreads()};
 
     const auto time_start{SteadyClock::now()};
@@ -2235,8 +2235,9 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         //  relative to a piece of software is an objective fact these defaults can be easily reviewed.
         // This setting doesn't force the selection of any particular chain but makes validating some faster by
         //  effectively caching the result of part of the verification.
-        if (const CBlockIndex* assumed_valid{m_blockman.m_block_index.Find(m_chainman.AssumedValidBlock())}) {
-            if (assumed_valid->GetAncestor(pindex->nHeight) == pindex &&
+        BlockMap::const_iterator it{m_blockman.m_block_index.find(m_chainman.AssumedValidBlock())};
+        if (it != m_blockman.m_block_index.end()) {
+            if (it->second.GetAncestor(pindex->nHeight) == pindex &&
                 m_chainman.m_best_header->GetAncestor(pindex->nHeight) == pindex &&
                 m_chainman.m_best_header->nChainWork >= m_chainman.MinimumChainWork()) {
                 // This block is a member of the assumed verified chain and an ancestor of the best header.
@@ -3492,8 +3493,8 @@ bool Chainstate::InvalidateBlock(BlockValidationState& state, CBlockIndex* pinde
 
     {
         LOCK(cs_main);
-        m_blockman.m_block_index.ForEach([&](CBlockIndex& block_index) {
-            CBlockIndex* candidate = &block_index;
+        for (auto& entry : m_blockman.m_block_index) {
+            CBlockIndex* candidate = &entry.second;
             // We don't need to put anything in our active chain into the
             // multimap, because those candidates will be found and considered
             // as we disconnect.
@@ -3505,7 +3506,7 @@ bool Chainstate::InvalidateBlock(BlockValidationState& state, CBlockIndex* pinde
                     candidate->HaveTxsDownloaded()) {
                 candidate_blocks_by_work.insert(std::make_pair(candidate->nChainWork, candidate));
             }
-        });
+        }
     }
 
     // Disconnect (descendants of) pindex, and mark them invalid.
@@ -3590,11 +3591,11 @@ bool Chainstate::InvalidateBlock(BlockValidationState& state, CBlockIndex* pinde
         // it up here, this should be an essentially unobservable error.
         // Loop back over all block index entries and add any missing entries
         // to setBlockIndexCandidates.
-        m_blockman.m_block_index.ForEach([this](CBlockIndex& block_index) {
+        for (auto& [_, block_index] : m_blockman.m_block_index) {
             if (block_index.IsValid(BLOCK_VALID_TRANSACTIONS) && block_index.HaveTxsDownloaded() && !setBlockIndexCandidates.value_comp()(&block_index, m_chain.Tip())) {
                 setBlockIndexCandidates.insert(&block_index);
             }
-        });
+        }
 
         InvalidChainFound(to_mark_failed);
     }
@@ -3612,7 +3613,7 @@ void Chainstate::ResetBlockFailureFlags(CBlockIndex *pindex) {
     int nHeight = pindex->nHeight;
 
     // Remove the invalidity flag from this block and all its descendants.
-    m_blockman.m_block_index.ForEach([&](CBlockIndex& block_index) {
+    for (auto& [_, block_index] : m_blockman.m_block_index) {
         if (!block_index.IsValid() && block_index.GetAncestor(nHeight) == pindex) {
             block_index.nStatus &= ~BLOCK_FAILED_MASK;
             m_blockman.m_dirty_blockindex.insert(&block_index);
@@ -3625,7 +3626,7 @@ void Chainstate::ResetBlockFailureFlags(CBlockIndex *pindex) {
             }
             m_chainman.m_failed_blocks.erase(&block_index);
         }
-    });
+    }
 
     // Remove the invalidity flag from all ancestors too.
     while (pindex != nullptr) {
@@ -3967,10 +3968,11 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
 
     // Check for duplicate
     uint256 hash = block.GetHash();
-    CBlockIndex* pindex{m_blockman.m_block_index.Find(hash)};
+    BlockMap::iterator miSelf{m_blockman.m_block_index.find(hash)};
     if (hash != GetConsensus().hashGenesisBlock) {
-        if (pindex != nullptr) {
+        if (miSelf != m_blockman.m_block_index.end()) {
             // Block header is already known.
+            CBlockIndex* pindex = &(miSelf->second);
             if (ppindex)
                 *ppindex = pindex;
             if (pindex->nStatus & BLOCK_FAILED_MASK) {
@@ -3991,11 +3993,13 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
         }
 
         // Get prev block index
-        CBlockIndex* pindexPrev{m_blockman.m_block_index.Find(block.hashPrevBlock)};
-        if (pindexPrev == nullptr) {
+        CBlockIndex* pindexPrev = nullptr;
+        BlockMap::iterator mi{m_blockman.m_block_index.find(block.hashPrevBlock)};
+        if (mi == m_blockman.m_block_index.end()) {
             LogPrint(BCLog::VALIDATION, "header %s has prev block not found: %s\n", hash.ToString(), block.hashPrevBlock.ToString());
             return state.Invalid(BlockValidationResult::BLOCK_MISSING_PREV, "prev-blk-not-found");
         }
+        pindexPrev = &((*mi).second);
         if (pindexPrev->nStatus & BLOCK_FAILED_MASK) {
             LogPrint(BCLog::VALIDATION, "header %s has prev block invalid: %s\n", hash.ToString(), block.hashPrevBlock.ToString());
             return state.Invalid(BlockValidationResult::BLOCK_INVALID_PREV, "bad-prevblk");
@@ -4048,7 +4052,7 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
         LogPrint(BCLog::VALIDATION, "%s: not adding new block header %s, missing anti-dos proof-of-work validation\n", __func__, hash.ToString());
         return state.Invalid(BlockValidationResult::BLOCK_HEADER_LOW_WORK, "too-little-chainwork");
     }
-    pindex = m_blockman.AddToBlockIndex(block, m_best_header);
+    CBlockIndex* pindex{m_blockman.AddToBlockIndex(block, m_best_header)};
 
     if (ppindex)
         *ppindex = pindex;
@@ -4284,7 +4288,7 @@ bool TestBlockValidity(BlockValidationState& state,
     CBlockIndex indexDummy(block);
     indexDummy.pprev = pindexPrev;
     indexDummy.nHeight = pindexPrev->nHeight + 1;
-    indexDummy.hash = block_hash;
+    indexDummy.phashBlock = &block_hash;
 
     // NOTE: CheckBlockHeader is called by CheckBlock
     if (!ContextualCheckBlockHeader(block, state, chainstate.m_blockman, chainstate.m_chainman, pindexPrev, adjusted_time_callback()))
@@ -4913,7 +4917,9 @@ void Chainstate::CheckBlockIndex()
 
     // Build forward-pointing map of the entire block tree.
     std::multimap<CBlockIndex*,CBlockIndex*> forward;
-    m_blockman.m_block_index.ForEach([&forward](CBlockIndex& block_index) { forward.emplace(block_index.pprev, &block_index); });
+    for (auto& [_, block_index] : m_blockman.m_block_index) {
+        forward.emplace(block_index.pprev, &block_index);
+    }
 
     assert(forward.size() == m_blockman.m_block_index.size());
 

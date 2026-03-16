@@ -385,11 +385,13 @@ static int64_t AddTx(ChainstateManager& chainman, CWallet& wallet, uint32_t lock
     CBlockIndex* block = nullptr;
     if (blockTime > 0) {
         LOCK(cs_main);
-        auto [inserted_block, inserted] = chainman.BlockIndex().try_emplace(GetRandHash());
-        assert(inserted);
-        block = inserted_block;
+        auto inserted = chainman.BlockIndex().emplace(std::piecewise_construct, std::make_tuple(GetRandHash()), std::make_tuple());
+        assert(inserted.second);
+        const uint256& hash = inserted.first->first;
+        block = &inserted.first->second;
         block->nTime = blockTime;
-        state = TxStateConfirmed{block->GetBlockHash(), block->nHeight, /*index=*/0};
+        block->phashBlock = &hash;
+        state = TxStateConfirmed{hash, block->nHeight, /*index=*/0};
     }
     return wallet.AddToWallet(MakeTransactionRef(tx), state, [&](CWalletTx& wtx, bool /* new_tx */) {
         // Assign wtx.m_state to simplify test and avoid the need to simulate

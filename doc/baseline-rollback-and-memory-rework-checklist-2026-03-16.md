@@ -181,17 +181,47 @@ Revert chain on `x/current-line-revert-memory-wallet`:
   4. `rescanblockchain 0` 可以恢复可花余额，说明剩余问题在 wallet 加载态重建，不在底层链数据本身
   5. `importdescriptors` 在 Windows PowerShell 验证脚本里还没完全跑通，当前是测试脚本参数传递问题，还不能算产品回归
 
+### `x/current-line-revert-blockmap`
+
+- Branch base: `x/current-line-revert-sendfix`
+- 分支基线：`x/current-line-revert-sendfix`
+- Branch intent: restore pre-`6f57c49f7` `BlockMap` / `CBlockIndex` semantics, while keeping the already-proven wallet send and RPC fallbacks.
+- 分支目标：恢复 `6f57c49f7` 之前的 `BlockMap` / `CBlockIndex` 语义，同时保留已验证有效的钱包发送与 RPC 回退。
+- Applied changes:
+- 已执行改动：
+  1. restored `std::unordered_map<uint256, CBlockIndex, BlockHasher>` in `src/node/blockstorage.h`
+  2. restored `phashBlock`-based `CBlockIndex` layout in `src/chain.h`
+  3. kept the low-risk memory reduction from dropping the per-index PoW cache fields in `src/chain.h`
+  4. kept `src/wallet/spend.cpp` and `src/wallet/rpc/transactions.cpp` tolerant fallbacks
+- 执行后的核心状态：
+  1. `src/node/blockstorage.h` 已恢复为 `std::unordered_map<uint256, CBlockIndex, BlockHasher>`
+  2. `src/chain.h` 已恢复 `phashBlock` 方案
+  3. `src/chain.h` 里“去掉每个 block index 的 PoW cache”这个低风险内存优化仍然保留
+  4. `src/wallet/spend.cpp` 和 `src/wallet/rpc/transactions.cpp` 的容错回退仍然保留
+- Verification artifacts:
+- 验证产物：
+  1. `verify-blockmap-rollback\\verify-artifacts\\blockmap-matrix-summary-20260316-162211.json`
+  2. `verify-blockmap-rollback\\verify-artifacts\\blockmap-matrix-dump-20260316-162211.txt`
+- Verified outcomes:
+- 已验证结果：
+  1. minimal MSVC build succeeds
+  2. `dumpwallet` succeeds
+  3. restart with `-wallet=smokewallet` preserves non-zero balance and non-empty `listunspent`
+  4. `sendtoaddress` succeeds after restart without running `rescanblockchain`
+- 已验证结果（中文）：
+  1. 最小 MSVC 构建通过
+  2. `dumpwallet` 正常
+  3. 用 `-wallet=smokewallet` 重启后，余额和 `listunspent` 都正常保留
+  4. 不执行 `rescanblockchain` 的情况下，重启后 `sendtoaddress` 也正常
+  5. 这说明当前已复现的 block index / wallet load 回归，确实被 `6f57c49f7` 那层容器与索引语义变更触发
+
 ## Current Decision / 当前判断
 
-- Do not revert every wallet patch together with the memory experiment.
-- 不要把所有钱包补丁跟着内存实验一起全回退。
-- The send fallback from `src/wallet/spend.cpp` is independently required even on the strict pre-512 baseline.
-- `src/wallet/spend.cpp` 里的发送回退在严格 pre-512 基线上也是独立必需的。
-- The RPC blocktime fallback in `src/wallet/rpc/transactions.cpp` is also independently required for `gettransaction`.
-- `src/wallet/rpc/transactions.cpp` 里的 RPC 区块时间回退对 `gettransaction` 也是独立必需的。
-- The best current candidate is still `x/current-line-revert-sendfix`, but it is not yet a stable baseline because restart/load and `dumpwallet` are still broken.
-- 当前最好的候选线仍然是 `x/current-line-revert-sendfix`，但它还不能算稳定基线，因为“重启加载”和 `dumpwallet` 仍然是坏的。
-- The next required wallet fix is no longer in `spend.cpp` or `rpc/transactions.cpp`; it has moved to the wallet load/backup path around `GetKeyBirthTimes`.
-- 下一步必须补的 wallet 修复已经不在 `spend.cpp` 或 `rpc/transactions.cpp`，而是在 `GetKeyBirthTimes` 附近的 wallet load/backup 路径。
-- Keep memory rollback evaluation and functional wallet fixes as separate concerns from this point forward.
-- 从现在开始，把“内存回退评估”和“钱包功能修复”彻底分开处理。
+- `6f57c49f7` is the first confirmed bad layer for the reproduced block index regressions.
+- `6f57c49f7` 已经可以确认是当前这批 block index 回归的第一层坏点。
+- The custom `BlockMap` / inline-hash `CBlockIndex` rewrite should stay out of the stable line until it has its own correctness proof and regression tests.
+- 自定义 `BlockMap` / inline-hash `CBlockIndex` 重写，在没有独立正确性证明和回归测试之前，不应回到稳定线。
+- The best current baseline is now `x/current-line-revert-blockmap`, not `x/current-line-revert-sendfix`.
+- 当前最好的稳定基线已经变成 `x/current-line-revert-blockmap`，不再是 `x/current-line-revert-sendfix`。
+- The safe memory-optimization direction is: keep the wallet fallbacks, keep low-risk `CBlockIndex` field reductions, but avoid changing block index container semantics.
+- 安全的内存优化方向是：保留 wallet 容错、保留低风险 `CBlockIndex` 字段裁剪，但不要再改 block index 容器语义。
