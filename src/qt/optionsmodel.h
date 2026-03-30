@@ -67,6 +67,7 @@ public:
         Prune,                  // bool
         PruneSize,              // int
         DatabaseCache,          // int
+        LowMemory,              // bool
         ExternalSignerPath,     // QString
         SpendZeroConfChange,    // bool
         Listen,                 // bool

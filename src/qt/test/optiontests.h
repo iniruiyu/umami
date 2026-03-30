@@ -21,6 +21,7 @@ private Q_SLOTS:
     void init(); // called before each test function execution.
     void migrateSettings();
     void integerGetArgBug();
+    void lowMemorySetting();
     void parametersInteraction();
     void extractFilter();
 

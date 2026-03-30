@@ -89,6 +89,25 @@ void OptionTests::integerGetArgBug()
     gArgs.WriteSettingsFile();
 }
 
+void OptionTests::lowMemorySetting()
+{
+    bilingual_str error;
+    OptionsModel options{m_node};
+    QVERIFY(options.Init(error));
+
+    QVERIFY(!options.getOption(OptionsModel::LowMemory).toBool());
+    QVERIFY(!options.isRestartRequired());
+
+    QVERIFY(options.setOption(OptionsModel::LowMemory, true));
+    QVERIFY(options.getOption(OptionsModel::LowMemory).toBool());
+    QVERIFY(options.isRestartRequired());
+    QVERIFY(gArgs.GetBoolArg("-lowmem", false));
+
+    QVERIFY(options.setOption(OptionsModel::LowMemory, false));
+    QVERIFY(!options.getOption(OptionsModel::LowMemory).toBool());
+    QVERIFY(!gArgs.GetBoolArg("-lowmem", false));
+}
+
 void OptionTests::parametersInteraction()
 {
     // Test that the bug https://github.com/sugarchain-core/gui/issues/567 does not resurface.

@@ -129,6 +129,13 @@ using node::fReindex;
 static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
 static constexpr bool DEFAULT_I2P_ACCEPT_INCOMING{true};
+static constexpr bool DEFAULT_LOWMEM{false};
+static constexpr int LOWMEM_DBCACHE_MB{128};
+static constexpr int LOWMEM_MAX_MEMPOOL_MB{64};
+static constexpr int LOWMEM_MAX_SIG_CACHE_MB{16};
+static constexpr int LOWMEM_MAX_CONNECTIONS{32};
+static constexpr int LOWMEM_SCRIPT_THREADS{1};
+static constexpr int LOWMEM_RPC_THREADS{2};
 
 #ifdef WIN32
 // Win32 LevelDB doesn't use filedescriptors, and the ones used for
@@ -444,6 +451,7 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbbatchsize", strprintf("Maximum database write batch size in bytes (default: %u)", nDefaultDbBatchSize), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Maximum database cache size <n> MiB (%d to %d, default: %d). In addition, unused mempool memory is shared for this cache (see -maxmempool).", nMinDbCache, nMaxDbCache, nDefaultDbCache), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-lowmem", strprintf("Apply a conservative low-memory preset to resource-related settings: -dbcache=%d, -maxmempool=%d, -maxsigcachesize=%d, -maxconnections=%d, -par=%d, -rpcthreads=%d. Explicitly set values override this preset. (default: %u)", LOWMEM_DBCACHE_MB, LOWMEM_MAX_MEMPOOL_MB, LOWMEM_MAX_SIG_CACHE_MB, LOWMEM_MAX_CONNECTIONS, LOWMEM_SCRIPT_THREADS, LOWMEM_RPC_THREADS, DEFAULT_LOWMEM), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-includeconf=<file>", "Specify additional configuration file, relative to the -datadir path (only useable from configuration file, not command line)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-maxmempool=<n>", strprintf("Keep the transaction memory pool below <n> megabytes (default: %u)", DEFAULT_MAX_MEMPOOL_SIZE_MB), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -743,6 +751,20 @@ void InitParameterInteraction(ArgsManager& args)
         // Reduce default mempool size in blocksonly mode to avoid unexpected resource usage
         if (args.SoftSetArg("-maxmempool", ToString(DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB)))
             LogPrintf("%s: parameter interaction: -blocksonly=1 -> setting -maxmempool=%d\n", __func__, DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB);
+    }
+
+    if (args.GetBoolArg("-lowmem", DEFAULT_LOWMEM)) {
+        auto soft_set_lowmem = [&](const char* arg, int value) {
+            if (args.SoftSetArg(arg, ToString(value))) {
+                LogPrintf("%s: parameter interaction: -lowmem=1 -> setting %s=%d\n", __func__, arg, value);
+            }
+        };
+        soft_set_lowmem("-dbcache", LOWMEM_DBCACHE_MB);
+        soft_set_lowmem("-maxmempool", LOWMEM_MAX_MEMPOOL_MB);
+        soft_set_lowmem("-maxsigcachesize", LOWMEM_MAX_SIG_CACHE_MB);
+        soft_set_lowmem("-maxconnections", LOWMEM_MAX_CONNECTIONS);
+        soft_set_lowmem("-par", LOWMEM_SCRIPT_THREADS);
+        soft_set_lowmem("-rpcthreads", LOWMEM_RPC_THREADS);
     }
 
     // Forcing relay from whitelisted hosts implies we will accept relays from them in the first place.

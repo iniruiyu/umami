@@ -41,6 +41,13 @@ threads take up 8MiB for the thread stack on a 64-bit system, and 4MiB in a
 - `-par=<n>` - the number of script verification threads, defaults to the number of cores in the system minus one.
 - `-rpcthreads=<n>` - the number of threads used for processing RPC requests, defaults to `4`.
 
+## Conservative preset
+
+- `-lowmem` applies a conservative low-memory preset to both `sugarchaind` and `sugarchain-qt`.
+  - It soft-sets `-dbcache=128`, `-maxmempool=64`, `-maxsigcachesize=16`, `-maxconnections=32`, `-par=1`, and `-rpcthreads=2`.
+  - Explicitly set values override the preset.
+  - It does not replace more aggressive modes like `-blocksonly`, `-disablewallet`, or `-prune`, which can further reduce memory usage but also change behavior.
+
 ## Linux specific
 
 By default, since glibc `2.10`, the C library will create up to two heap arenas per core. This is known to cause excessive memory usage in some scenarios. To avoid this make a script that sets `MALLOC_ARENA_MAX` before starting sugarchaind:

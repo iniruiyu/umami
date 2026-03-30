@@ -3,6 +3,10 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <test/util/setup_common.h>
+#include <httpserver.h>
+#include <kernel/mempool_options.h>
+#include <script/sigcache.h>
+#include <txdb.h>
 #include <univalue.h>
 #include <util/settings.h>
 #include <util/strencodings.h>
@@ -449,6 +453,88 @@ BOOST_AUTO_TEST_CASE(logargs)
     BOOST_CHECK(str.find("Command-line arg: okaylog=\"public\"") != std::string::npos);
     BOOST_CHECK(str.find("dontlog=****") != std::string::npos);
     BOOST_CHECK(str.find("private42") == std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(lowmem_parameter_interaction)
+{
+    constexpr int LOWMEM_DBCACHE_MB{128};
+    constexpr int LOWMEM_MAX_MEMPOOL_MB{64};
+    constexpr int LOWMEM_MAX_SIG_CACHE_MB{16};
+    constexpr int LOWMEM_MAX_CONNECTIONS{32};
+    constexpr int LOWMEM_SCRIPT_THREADS{1};
+    constexpr int LOWMEM_RPC_THREADS{2};
+
+    auto init_server_args = [&](ArgsManager& args, const std::vector<std::string>& extra_args) {
+        SetupServerArgs(args);
+        std::vector<std::string> argv{"testsugarchain", "-datadir=" + fs::PathToString(m_path_root)};
+        argv.insert(argv.end(), extra_args.begin(), extra_args.end());
+
+        std::vector<const char*> argv_c;
+        argv_c.reserve(argv.size());
+        for (const auto& arg : argv) argv_c.push_back(arg.c_str());
+
+        std::string error;
+        BOOST_REQUIRE(args.ParseParameters(argv_c.size(), argv_c.data(), error));
+        BOOST_REQUIRE_EQUAL(error, "");
+        InitParameterInteraction(args);
+        BOOST_REQUIRE(AppInitParameterInteraction(args));
+    };
+
+    {
+        ArgsManager args;
+        init_server_args(args, {});
+
+        BOOST_CHECK(!args.IsArgSet("-dbcache"));
+        BOOST_CHECK(!args.IsArgSet("-maxmempool"));
+        BOOST_CHECK(!args.IsArgSet("-maxsigcachesize"));
+        BOOST_CHECK(!args.IsArgSet("-maxconnections"));
+        BOOST_CHECK(!args.IsArgSet("-par"));
+        BOOST_CHECK(!args.IsArgSet("-rpcthreads"));
+    }
+
+    {
+        ArgsManager args;
+        init_server_args(args, {"-lowmem"});
+
+        BOOST_CHECK_EQUAL(args.GetIntArg("-dbcache", nDefaultDbCache), LOWMEM_DBCACHE_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE_MB), LOWMEM_MAX_MEMPOOL_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_BYTES >> 20), LOWMEM_MAX_SIG_CACHE_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS), LOWMEM_MAX_CONNECTIONS);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-par", DEFAULT_SCRIPTCHECK_THREADS), LOWMEM_SCRIPT_THREADS);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-rpcthreads", DEFAULT_HTTP_THREADS), LOWMEM_RPC_THREADS);
+    }
+
+    {
+        ArgsManager args;
+        init_server_args(args, {
+            "-lowmem",
+            "-dbcache=256",
+            "-maxmempool=96",
+            "-maxsigcachesize=24",
+            "-maxconnections=48",
+            "-par=3",
+            "-rpcthreads=6",
+        });
+
+        BOOST_CHECK_EQUAL(args.GetIntArg("-dbcache", nDefaultDbCache), 256);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE_MB), 96);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_BYTES >> 20), 24);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS), 48);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-par", DEFAULT_SCRIPTCHECK_THREADS), 3);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-rpcthreads", DEFAULT_HTTP_THREADS), 6);
+    }
+
+    {
+        ArgsManager args;
+        init_server_args(args, {"-lowmem", "-blocksonly"});
+
+        BOOST_CHECK_EQUAL(args.GetIntArg("-dbcache", nDefaultDbCache), LOWMEM_DBCACHE_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE_MB), DEFAULT_BLOCKSONLY_MAX_MEMPOOL_SIZE_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_BYTES >> 20), LOWMEM_MAX_SIG_CACHE_MB);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS), LOWMEM_MAX_CONNECTIONS);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-par", DEFAULT_SCRIPTCHECK_THREADS), LOWMEM_SCRIPT_THREADS);
+        BOOST_CHECK_EQUAL(args.GetIntArg("-rpcthreads", DEFAULT_HTTP_THREADS), LOWMEM_RPC_THREADS);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -6,6 +6,7 @@
 #include <config/sugarchain-config.h>
 #endif
 
+#include <init.h>
 #include <qt/optionsmodel.h>
 
 #include <qt/sugarchainunits.h>
@@ -39,6 +40,7 @@ static const char* SettingName(OptionsModel::OptionID option)
 {
     switch (option) {
     case OptionsModel::DatabaseCache: return "dbcache";
+    case OptionsModel::LowMemory: return "lowmem";
     case OptionsModel::ThreadsScriptVerif: return "par";
     case OptionsModel::SpendZeroConfChange: return "spendzeroconfchange";
     case OptionsModel::ExternalSignerPath: return "signer";
@@ -185,7 +187,7 @@ bool OptionsModel::Init(bilingual_str& error)
 
     // These are shared with the core or have a command-line parameter
     // and we want command-line parameters to overwrite the GUI settings.
-    for (OptionID option : {DatabaseCache, ThreadsScriptVerif, SpendZeroConfChange, ExternalSignerPath, MapPortUPnP,
+    for (OptionID option : {DatabaseCache, LowMemory, ThreadsScriptVerif, SpendZeroConfChange, ExternalSignerPath, MapPortUPnP,
                             MapPortNatpmp, Listen, Server, Prune, ProxyUse, ProxyUseTor, Language}) {
         std::string setting = SettingName(option);
         if (node().isSettingIgnored(setting)) addOverriddenOption("-" + setting);
@@ -441,6 +443,8 @@ QVariant OptionsModel::getOption(OptionID option, const std::string& suffix) con
                                          DEFAULT_PRUNE_TARGET_GB;
     case DatabaseCache:
         return qlonglong(SettingToInt(setting(), nDefaultDbCache));
+    case LowMemory:
+        return SettingToBool(setting(), DEFAULT_LOWMEM);
     case ThreadsScriptVerif:
         return qlonglong(SettingToInt(setting(), DEFAULT_SCRIPTCHECK_THREADS));
     case Listen:
@@ -621,6 +625,12 @@ bool OptionsModel::setOption(OptionID option, const QVariant& value, const std::
     case DatabaseCache:
         if (changed()) {
             update(static_cast<int64_t>(value.toLongLong()));
+            setRestartRequired(true);
+        }
+        break;
+    case LowMemory:
+        if (changed()) {
+            update(value.toBool());
             setRestartRequired(true);
         }
         break;
