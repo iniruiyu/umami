@@ -4082,27 +4082,6 @@ bool ChainstateManager::ProcessNewBlockHeaders(const std::vector<CBlockHeader>& 
 {
     AssertLockNotHeld(cs_main);
 
-    /* YespowerSugar */
-    // Look for this block's header in the index like AcceptBlock() will
-    {
-        LOCK(cs_main);
-
-        for (const CBlockHeader& header : headers) {
-            uint256 hash = header.GetHash();
-            BlockMap::iterator miSelf{m_blockman.m_block_index.find(hash)};
-            if (miSelf != m_blockman.m_block_index.end()) {
-                // Block header is already known
-                CBlockIndex* pindex = &(miSelf->second);
-                if (!header.cache_init && pindex->cache_init) {
-                    LOCK(header.cache_lock); // Probably unnecessary since no concurrent access to pblock is expected
-                    header.cache_init = true;
-                    header.cache_block_hash = pindex->cache_block_hash;
-                    header.cache_PoW_hash = pindex->cache_PoW_hash;
-                }
-            }
-        }
-    }
-
     {
         LOCK(cs_main);
         for (const CBlockHeader& header : headers) {
